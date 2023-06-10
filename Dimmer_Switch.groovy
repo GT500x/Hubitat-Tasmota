@@ -63,11 +63,12 @@ metadata {
 		//Driver specific variables where case does not matter.
         attribute "Fade", "string"
         attribute "FadeSpeed", "string"  
-        attribute "Status", "string"  
+        attribute "Status", "string"
+        attribute "ipLink", "string"
 	}
     section("Configure the Inputs"){
 			input name: "destIP", type: "text", title: bold(dodgerBlue("Tasmota Device IP Address")), description: italic("The IP address of the Tasmota device."), defaultValue: "192.168.0.X", required:true, displayDuringSetup: true
-            input name: "HubIP", type: "text", title: bold(dodgerBlue("Hubitat Hub IP Address")), description: italic("The Hubitat Hub Address. Used by Tasmota rules to send HTTP responses."), defaultValue: "192.168.0.X", required:true, displayDuringSetup: true
+            //input name: "HubIP", type: "text", title: bold(dodgerBlue("Hubitat Hub IP Address")), description: italic("The Hubitat Hub Address. Used by Tasmota rules to send HTTP responses."), defaultValue: "192.168.0.X", required:true, displayDuringSetup: true
             input name: "timeout", type: "number", title: bold("Timeout for Tasmota reponse."), description: italic("Time in ms after which a Transaction is closed by the watchdog and subsequent responses will be ignored. Default 5000ms."), defaultValue: "5000", required:true, displayDuringSetup: false
             input name: "debounce", type: "number", title: bold("Debounce Interval for Tasmota Sync."), description: italic("The period in ms from command invocation during which a Tasmota Sync request will be ignored. Default 7000ms."), defaultValue: "7000", required:true, displayDuringSetup: false
             input name: "logging_level", type: "number", title: bold("Level of detail displayed in log"), description: italic("Enter log level 0-3. (Default is 0.)"), defaultValue: "0", required:true, displayDuringSetup: false            
@@ -127,7 +128,8 @@ def initialize(){
     if ( device.currentValue("Status") == null ) updateStatus("Complete") 
     if ( device.currentValue("Fade") == null ) sendEvent(name: "Fade", value: "Unknown")
     if ( device.currentValue("FadeSpeed") == null ) sendEvent(name: "FadeSpeed", value: "Unknown")
-          
+    
+    sendEvent(name: "ipLink", value: "<a target=\"device\" href=\"http://$destIP\">$destIP</a>", isStateChange: false)
     //Do a refresh to sync the device driver
     refresh()
 }
@@ -295,7 +297,7 @@ def hubitatResponse(body){
                     updateStatus("Complete:Success")
                     //We got the response we were looking for so we can actually change the state of the switch in the UI.
 					//If the switch is turned off then the power statistics (if applicable) must be zero. However, if TSync is enabled then it will fire a Sync anyway.																															   
-                    sendEvent(name: "switch", value: ActionValue.toLowerCase(), descriptionText: "The switch has been turned ${ActionValue.toLowerCase()}", isStateChange: true )
+                    sendEvent(name: "switch", value: ActionValue.toLowerCase(), descriptionText: "The switch has been turned ${ActionValue.toLowerCase()}", type: "digital" )
                     if ( ActionValue.toLowerCase() == "on" ) state.lastOn = new Date().format('MM-dd HH:mm:ss')
                     if ( ActionValue.toLowerCase() == "off" ) state.lastOff = new Date().format('MM-dd HH:mm:ss')
                   }
@@ -316,8 +318,8 @@ def hubitatResponse(body){
                     if ( ActionValue.toInteger() == body.DIMMER.toInteger() ){
                 	    log ("hubitatResponse", "Dimmer applied successfully", 0)
                         updateStatus("Complete:Success")
-                        sendEvent(name: "level", value: ActionValue, displayed:true, isStateChange: true)
-                        sendEvent(name: "switch", value: "on", displayed:true)
+                        sendEvent(name: "level", value: ActionValue, type: "digital")
+                        sendEvent(name: "switch", value: "on", type: "digital")
                         } 
                     else {
                         updateStatus("Complete:Fail")                
@@ -328,8 +330,8 @@ def hubitatResponse(body){
                     //ActionValue was non numeric (Dimmer + or Dimmer -) so we have to assume the new value was a correct increment or decrement.
                     log ("hubitatResponse", "Dimmer ${ActionValue} applied successfully", 0)
                     updateStatus("Complete:Success")
-                    sendEvent(name: "level", value: body.DIMMER.toInteger(), displayed:true, isStateChange: true)
-                    sendEvent(name: "switch", value: "on", displayed:true)
+                    sendEvent(name: "level", value: body.DIMMER.toInteger(), type: "digital")
+                    sendEvent(name: "switch", value: "on", type: "digital")
                 } 
                 break
             
@@ -337,7 +339,7 @@ def hubitatResponse(body){
                 log("hubitatResponse", "Command FADE: ${body.FADE}", 1)
                 if (ActionValue.toUpperCase() == body.FADE){
                     log ("hubitatResponse","Fade applied successfully: ${body.FADE.toLowerCase()}", 0)
-                    sendEvent(name:"Fade", value: "${body.FADE.toLowerCase()}", displayed:true, isStateChange: true)
+                    sendEvent(name:"Fade", value: "${body.FADE.toLowerCase()}", type: "digital")
                     updateStatus("Complete:Success")
                 } 
             else 
@@ -351,7 +353,7 @@ def hubitatResponse(body){
                 log("hubitatResponse", "Command Speed: ${body.SPEED}", 1)
                 if (ActionValue.toInteger() == body.SPEED.toInteger() ){
                 	log ("hubitatResponse","Fade Speed applied successfully: ${body.SPEED}", 0)
-                    sendEvent(name:"FadeSpeed", value: "${body.SPEED}", displayed:true, isStateChange: true)
+                    sendEvent(name:"FadeSpeed", value: "${body.SPEED}", type: "digital")
                     updateStatus("Complete:Success")
                 } 
             else 
@@ -375,8 +377,8 @@ def hubitatResponse(body){
                 //"HSBColor":"248,84,0","White":68,"CT":500,"Channel":[0,0,0,0,68],"Scheme":0,"Fade":"OFF","Speed":20,"LedTable":"ON","Wifi":{"AP":1,"SSId":"5441","BSSId":"A0:04:60:95:0E:62","Channel":6,"Mode":"11n",
                 //"RSSI":100,"Signal":-47,"LinkCount":1,"Downtime":"0T00:00:06"}}
                 log ("hubitatResponse","Setting device handler values to match device.", 0)
-                sendEvent(name: "switch", value: body.POWER.toLowerCase(), descriptionText: "The switch has been turned ${body.POWER.toLowerCase()}", isStateChange: true )
-                sendEvent(name: "level", value: body.DIMMER.toInteger(), descriptionText: "The dimmer has been set to ${body.DIMMER.toInteger()}", isStateChange: true )
+                sendEvent(name: "switch", value: body.POWER.toLowerCase(), descriptionText: "The switch has been turned ${body.POWER.toLowerCase()}", type: "digital")
+                sendEvent(name: "level", value: body.DIMMER.toInteger(), descriptionText: "The dimmer has been set to ${body.DIMMER.toInteger()}", type: "digital")
                 updateStatus("Complete:Success")
             	break
             
@@ -446,12 +448,12 @@ def syncTasmota(body){
         if (body?.SPEED != '') { speed = body?.SPEED.toInteger() ; log ("syncTasmota","FadeSpeed is: ${speed}", 2) }
         
         //Only changes will get logged so we can report everything. 
-        if ( switch1.toInteger() == 0 ) sendEvent(name: "switch", value: "off", descriptionText: "The switch was turned off.")
-        if ( switch1.toInteger() == 1 ) sendEvent(name: "switch", value: "on", descriptionText: "The switch was turned on.")
-        if ( fade != "SAME" ) sendEvent(name: "Fade", value: fade.toLowerCase())
-        if ( speed >= 0 ) sendEvent(name: "FadeSpeed", value: "${speed}")
+        if ( switch1.toInteger() == 0 ) sendEvent(name: "switch", value: "off", descriptionText: "The switch was turned off.", type: "physical")
+        if ( switch1.toInteger() == 1 ) sendEvent(name: "switch", value: "on", descriptionText: "The switch was turned on.", type: "physical")
+        if ( fade != "SAME" ) sendEvent(name: "Fade", value: fade.toLowerCase(), type: "physical")
+        if ( speed >= 0 ) sendEvent(name: "FadeSpeed", value: "${speed}", type: "physical")
         //Send dimmer events if we have new data. Ignore anything less than 0.
-        if ( dimmer >= 0 ) sendEvent(name: "level", value: dimmer, unit: "Percent" )
+        if ( dimmer >= 0 ) sendEvent(name: "level", value: dimmer, unit: "Percent", type: "physical" )
         
         updateStatus ("Complete:Tasmota Sync")
         log ("syncTasmota", "Sync completed. Exiting", 0)
@@ -535,8 +537,7 @@ def tasmotaInjectRule(){
     rule3 = rule3 + "ON Speed#Data DO backlog0 Var14 %value% ; RuleTimer1 1 ENDON "
     rule3 = rule3 + "ON Rules#Timer=1 DO Var15 %Var11%,%Var12%,%Var13%,%Var14% ENDON "
     //We have to use single quotes here as there is no way to pass a double quote via a URL. We will replace the single quote with a double quote when we get a response back so it can be handled as JSON.
-    rule3 = rule3 + "ON Var15#State\$!%Var16% DO backlog ; Var16 %Var15% ; webquery http://" + settings.HubIP + ":39501 POST {'TSync':'True','Switch':'%Var11%','Dimmer':'%Var12%','Fade':'%Var13%','Speed':'%Var14%'} ENDON "
-    
+    rule3 = rule3 + "ON Var15#State\$!%Var16% DO backlog ; Var16 %Var15% ; webquery http://${device.hub.getDataValue("localIP")}:${device.hub.getDataValue("localSrvPortTCP")} POST {'TSync':'True','Switch':'%Var11%','Dimmer':'%Var12%','Fade':'%Var13%','Speed':'%Var14%'} ENDON "
     //Now install the rule onto Tasmota
     callTasmota("RULE3", rule3)
     
